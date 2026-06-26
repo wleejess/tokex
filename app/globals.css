@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --font-inter: 'Inter', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* Token word chip */
+.token-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 15px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  white-space: pre;
+  transition: background 0.1s, border-color 0.1s;
+  line-height: 1.6;
+  user-select: none;
+}
+
+.token-chip.confidence-high {
+  background: rgba(29, 158, 117, 0.1);
+  border-color: rgba(29, 158, 117, 0.28);
+}
+.token-chip.confidence-mid {
+  background: rgba(186, 117, 23, 0.09);
+  border-color: rgba(186, 117, 23, 0.22);
+}
+.token-chip.confidence-low {
+  background: rgba(226, 75, 74, 0.09);
+  border-color: rgba(226, 75, 74, 0.22);
+}
+.token-chip.selected {
+  background: #dbeafe !important;
+  border-color: #3b82f6 !important;
+}
+.token-chip:hover:not(.selected) {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+/* Streaming cursor */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.cursor-blink {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: currentColor;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 0.8s ease-in-out infinite;
+}
+
+/* Confidence dot */
+.conf-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  margin-left: 3px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.conf-dot.high { background: #1D9E75; }
+.conf-dot.mid  { background: #BA7517; }
+.conf-dot.low  { background: #E24B4A; }
+
+/* Probability bar */
+.prob-bar-track {
+  flex: 1;
+  height: 7px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 0.5px solid #e5e7eb;
+}
+.prob-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.35s ease;
+}
+.prob-bar-fill.chosen { background: #1D9E75; }
+.prob-bar-fill.alt    { background: #9ca3af; }
+
+/* Fade in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+  animation: fadeIn 0.2s ease forwards;
+}
