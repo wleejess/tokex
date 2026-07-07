@@ -11,6 +11,7 @@ interface Props {
   context: string
   model: string
   mode: 'technical' | 'accessible'
+  apiKey: string
   onClose: () => void
 }
 
@@ -21,6 +22,7 @@ export default function DistributionPanel({
   context,
   model,
   mode,
+  apiKey,
   onClose,
 }: Props) {
   const [whyText, setWhyText] = useState<string | null>(null)
@@ -41,7 +43,10 @@ export default function DistributionPanel({
       try {
         const res = await fetch('/api/distributions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(apiKey.trim() ? { 'x-anthropic-key': apiKey.trim() } : {}),
+          },
           body: JSON.stringify({
             type: 'why',
             context,
@@ -59,12 +64,11 @@ export default function DistributionPanel({
         setWhyLoading(false)
       }
     },
-    [context, token, mode, model]
+    [context, token, mode, model, apiKey]
   )
 
   return (
     <div className="fade-in bg-neutral-50 border border-neutral-200 rounded-xl p-5">
-      {/* Header */}
       <div className="flex justify-between items-start mb-4">
         <div>
           <p className="text-xs text-neutral-400 uppercase tracking-wide mb-1">
@@ -86,11 +90,9 @@ export default function DistributionPanel({
         </button>
       </div>
 
-      {/* Distribution bars */}
       <div className="space-y-2 mb-3">
         {token.dist.map((d, i) => (
           <div key={i} className="flex items-center gap-2">
-            {/* Word label */}
             <span
               className={`font-mono text-sm min-w-[100px] ${
                 i === 0
@@ -102,16 +104,12 @@ export default function DistributionPanel({
             >
               {i === 0 ? '✓ ' : ''}{d.word.trim()}
             </span>
-
-            {/* Bar */}
             <div className="prob-bar-track">
               <div
                 className={`prob-bar-fill ${i === 0 ? 'chosen' : 'alt'}`}
                 style={{ width: `${Math.round(d.prob)}%` }}
               />
             </div>
-
-            {/* Percent */}
             <span className="text-xs text-neutral-500 min-w-[34px] text-right">
               {Math.round(d.prob)}%
             </span>
@@ -119,14 +117,12 @@ export default function DistributionPanel({
         ))}
       </div>
 
-      {/* Remainder note */}
       {note && (
         <p className="text-xs text-neutral-400 italic border-t border-neutral-200 pt-2 mb-3">
           {note}
         </p>
       )}
 
-      {/* Technical metrics */}
       {mode === 'technical' && (
         <div className="grid grid-cols-3 gap-2 mb-4">
           {[
@@ -134,10 +130,7 @@ export default function DistributionPanel({
             { label: 'Top-1 prob', value: `${Math.round(topProb)}%` },
             { label: 'Shown alts', value: shownAlts.toString() },
           ].map(({ label, value }) => (
-            <div
-              key={label}
-              className="bg-white border border-neutral-200 rounded-lg px-3 py-2"
-            >
+            <div key={label} className="bg-white border border-neutral-200 rounded-lg px-3 py-2">
               <p className="text-[11px] text-neutral-400 mb-0.5">{label}</p>
               <p className="text-sm font-mono font-medium">{value}</p>
             </div>
@@ -145,24 +138,18 @@ export default function DistributionPanel({
         </div>
       )}
 
-      {/* Why section */}
       <div className="border-t border-neutral-200 pt-3">
         <p className="text-[11px] text-neutral-400 uppercase tracking-wide mb-2">
           {mode === 'technical' ? 'Why this token?' : 'Why did the model choose this word?'}
         </p>
-
         {!activeAlt && !whyText && (
           <p className="text-sm text-neutral-400 italic">
             Click an alternative word above to get a head-to-head explanation.
           </p>
         )}
-
         {whyLoading && (
-          <p className="text-sm text-neutral-400 italic animate-pulse">
-            Asking Claude…
-          </p>
+          <p className="text-sm text-neutral-400 italic animate-pulse">Asking Claude…</p>
         )}
-
         {whyText && !whyLoading && (
           <div className="fade-in">
             {activeAlt && (

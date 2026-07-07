@@ -11,6 +11,8 @@ type Phase = 'idle' | 'streaming' | 'distributing' | 'ready' | 'error'
 type ViewMode = 'explorer' | 'compare'
 
 export default function TokenExplorer() {
+  const [apiKey, setApiKey] = useState('')
+  const [keyVisible, setKeyVisible] = useState(false)
   const [prompt, setPrompt] = useState(BENCHMARK_PROMPTS[3].prompt)
   const [model, setModel] = useState<ModelId>('claude-3-5-sonnet-20241022')
   const [temperature, setTemperature] = useState(0.7)
@@ -25,8 +27,18 @@ export default function TokenExplorer() {
 
   const abortRef = useRef<AbortController | null>(null)
 
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    ...(apiKey.trim() ? { 'x-anthropic-key': apiKey.trim() } : {}),
+  }
+
   const generate = useCallback(async () => {
     if (!prompt.trim()) return
+    if (!apiKey.trim()) {
+      setError('Please enter your Anthropic API key above to generate a response.')
+      return
+    }
+
     abortRef.current?.abort()
     abortRef.current = new AbortController()
 
@@ -40,12 +52,15 @@ export default function TokenExplorer() {
     try {
       const res = await fetch('/api/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ prompt, model, temperature }),
         signal: abortRef.current.signal,
       })
 
-      if (!res.ok) throw new Error(`Stream error ${res.status}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `Stream error ${res.status}`)
+      }
 
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
@@ -72,7 +87,7 @@ export default function TokenExplorer() {
     try {
       const res = await fetch('/api/distributions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ type: 'distributions', prompt, model, temperature }),
         signal: abortRef.current.signal,
       })
@@ -85,21 +100,63 @@ export default function TokenExplorer() {
       setError(`Distribution fetch failed: ${(err as Error).message}`)
       setPhase('error')
     }
-  }, [prompt, model, temperature])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prompt, model, temperature, apiKey])
 
   const handleTokenClick = (idx: number) => {
     setSelectedToken(selectedToken === idx ? null : idx)
   }
 
   const selectedModel = MODELS.find((m) => m.id === model)
+  const keyEntered = apiKey.trim().length > 0
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
       {/* Header */}
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Token Explorer</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Tokex</h1>
         <p className="text-sm text-neutral-500">
           Watch a language model choose each word — inspect probability distributions, entropy, and why one token beat another.
+        </p>
+      </div>
+
+      {/* API Key input */}
+      <div className="bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 space-y-2">
+        <label className="block text-xs text-neutral-400 uppercase tracking-wide">
+          Anthropic API Key — required
+        </label>
+        <div className="flex gap-2 items-center">
+          <input
+            type={keyVisible ? 'text' : 'password'}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="sk-ant-..."
+            className="flex-1 border border-neutral-200 rounded-lg px-3 py-1.5 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+          <button
+            onClick={() => setKeyVisible(!keyVisible)}
+            className="text-xs text-neutral-400 hover:text-neutral-600 px-2 py-1.5 border border-neutral-200 rounded-lg bg-white"
+          >
+            {keyVisible ? 'Hide' : 'Show'}
+          </button>
+          {keyEntered && (
+            <span className="text-xs text-emerald-600 font-medium whitespace-nowrap">
+              ✓ Key set
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-neutral-400">
+          Your key is never stored — it&apos;s sent only with each request and stays in your browser.
+          Get one at{' '}
+          <a
+            href="https://console.anthropic.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-neutral-600"
+          >
+            console.anthropic.com
+          </a>
+          .
         </p>
       </div>
 
@@ -190,8 +247,6 @@ export default function TokenExplorer() {
           placeholder="Type a prompt or pick a benchmark below…"
           className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-sm bg-white resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 leading-relaxed"
         />
-
-        {/* Benchmark pills */}
         <div className="flex flex-wrap gap-1.5 items-center">
           <span className="text-xs text-neutral-400">Benchmarks:</span>
           {BENCHMARK_PROMPTS.map((b) => (
@@ -221,7 +276,6 @@ export default function TokenExplorer() {
               : 'Generate response →'}
           </button>
 
-          {/* Output box */}
           {(phase !== 'idle' || tokens.length > 0) && (
             <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-3">
               <p className="text-xs text-neutral-400 uppercase tracking-wide">
@@ -234,7 +288,6 @@ export default function TokenExplorer() {
                   : 'Loading distributions…'}
               </p>
 
-              {/* Streaming text (shown while streaming or distributing) */}
               {(phase === 'streaming' || phase === 'distributing') && (
                 <div className="text-base leading-loose text-neutral-800">
                   {streamText}
@@ -247,15 +300,13 @@ export default function TokenExplorer() {
                 </div>
               )}
 
-              {/* Token chips (shown when ready) */}
               {phase === 'ready' && tokens.length > 0 && (
                 <>
-                  {/* Legend */}
                   <div className="flex flex-wrap gap-3 text-xs text-neutral-500 pb-2 border-b border-neutral-100">
                     {[
-                      { cls: 'high', label: mode === 'technical' ? 'High confidence (>60%)' : 'Model was very sure', color: 'bg-emerald-100 border-emerald-300' },
-                      { cls: 'mid',  label: mode === 'technical' ? 'Medium (20–60%)' : 'A few good options', color: 'bg-amber-100 border-amber-300' },
-                      { cls: 'low',  label: mode === 'technical' ? 'Contested (<20%)' : 'Many competing words', color: 'bg-red-100 border-red-300' },
+                      { label: mode === 'technical' ? 'High confidence (>60%)' : 'Model was very sure', color: 'bg-emerald-100 border-emerald-300' },
+                      { label: mode === 'technical' ? 'Medium (20–60%)' : 'A few good options', color: 'bg-amber-100 border-amber-300' },
+                      { label: mode === 'technical' ? 'Contested (<20%)' : 'Many competing words', color: 'bg-red-100 border-red-300' },
                     ].map(({ label, color }) => (
                       <span key={label} className="flex items-center gap-1.5">
                         <span className={`inline-block w-3 h-3 rounded border ${color}`} />
@@ -263,7 +314,6 @@ export default function TokenExplorer() {
                       </span>
                     ))}
                   </div>
-
                   <div className="flex flex-wrap gap-1 leading-loose">
                     {tokens.map((t, i) => (
                       <TokenWord
@@ -281,14 +331,12 @@ export default function TokenExplorer() {
             </div>
           )}
 
-          {/* Error */}
           {phase === 'error' && error && (
             <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
               {error}
             </p>
           )}
 
-          {/* Distribution panel */}
           {phase === 'ready' && selectedToken !== null && tokens[selectedToken] && (
             <DistributionPanel
               token={tokens[selectedToken]}
@@ -298,17 +346,21 @@ export default function TokenExplorer() {
               model={model}
               mode={mode}
               onClose={() => setSelectedToken(null)}
+              apiKey={apiKey}
             />
           )}
         </div>
       )}
 
-      {/* Compare view */}
       {viewMode === 'compare' && (
-        <ModelCompare prompt={prompt} temperature={temperature} mode={mode} />
+        <ModelCompare
+          prompt={prompt}
+          temperature={temperature}
+          mode={mode}
+          apiKey={apiKey}
+        />
       )}
 
-      {/* Footer note */}
       <p className="text-xs text-neutral-400 leading-relaxed border-t border-neutral-100 pt-4">
         <strong className="font-medium text-neutral-500">Note:</strong> Distributions are Claude&apos;s self-estimated token probabilities, not true softmax logprobs (Anthropic does not currently expose logprobs via API). They reflect genuine linguistic reasoning but are approximations. Entropy values are calculated from the reported top-5 distribution.
       </p>

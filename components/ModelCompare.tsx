@@ -18,16 +18,21 @@ interface Props {
   prompt: string
   temperature: number
   mode: 'technical' | 'accessible'
+  apiKey: string
 }
 
 async function fetchDistributions(
   prompt: string,
   model: ModelId,
-  temperature: number
+  temperature: number,
+  apiKey: string
 ): Promise<TokenData[]> {
   const res = await fetch('/api/distributions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(apiKey.trim() ? { 'x-anthropic-key': apiKey.trim() } : {}),
+    },
     body: JSON.stringify({ type: 'distributions', prompt, model, temperature }),
   })
   const data = await res.json()
@@ -35,7 +40,7 @@ async function fetchDistributions(
   return data.tokens
 }
 
-export default function ModelCompare({ prompt, temperature, mode }: Props) {
+export default function ModelCompare({ prompt, temperature, mode, apiKey }: Props) {
   const [modelA, setModelA] = useState<ModelId>('claude-3-5-haiku-20241022')
   const [modelB, setModelB] = useState<ModelId>('claude-3-5-sonnet-20241022')
   const [resultA, setResultA] = useState<ModelResult | null>(null)
@@ -46,6 +51,7 @@ export default function ModelCompare({ prompt, temperature, mode }: Props) {
 
   async function runComparison() {
     if (!prompt.trim()) return
+    if (!apiKey.trim()) return
     setRunning(true)
     setSelectedA(null)
     setSelectedB(null)
@@ -53,8 +59,8 @@ export default function ModelCompare({ prompt, temperature, mode }: Props) {
     setResultB({ model: modelB, tokens: [], loading: true, error: null })
 
     const [resA, resB] = await Promise.allSettled([
-      fetchDistributions(prompt, modelA, temperature),
-      fetchDistributions(prompt, modelB, temperature),
+      fetchDistributions(prompt, modelA, temperature, apiKey),
+      fetchDistributions(prompt, modelB, temperature, apiKey),
     ])
 
     setResultA({
@@ -76,7 +82,6 @@ export default function ModelCompare({ prompt, temperature, mode }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Model selectors */}
       <div className="grid grid-cols-2 gap-3">
         {([
           { val: modelA, set: setModelA, label: 'Model A' },
@@ -92,9 +97,7 @@ export default function ModelCompare({ prompt, temperature, mode }: Props) {
               className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
             >
               {MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
+                <option key={m.id} value={m.id}>{m.label}</option>
               ))}
             </select>
             {modelInfo(val) && (
@@ -106,13 +109,12 @@ export default function ModelCompare({ prompt, temperature, mode }: Props) {
 
       <button
         onClick={runComparison}
-        disabled={running || !prompt.trim()}
+        disabled={running || !prompt.trim() || !apiKey.trim()}
         className="w-full py-2 px-4 border border-neutral-300 rounded-lg text-sm font-medium bg-white hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
-        {running ? 'Running comparison…' : 'Compare models →'}
+        {running ? 'Running comparison…' : !apiKey.trim() ? 'Enter API key above to compare' : 'Compare models →'}
       </button>
 
-      {/* Results side by side */}
       {(resultA || resultB) && (
         <div className="grid grid-cols-2 gap-4">
           {[
@@ -123,15 +125,12 @@ export default function ModelCompare({ prompt, temperature, mode }: Props) {
               <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
                 {label} — {result ? modelInfo(result.model)?.label : ''}
               </p>
-
               {result?.loading && (
                 <div className="text-sm text-neutral-400 italic animate-pulse">Generating…</div>
               )}
-
               {result?.error && (
                 <p className="text-sm text-red-500">{result.error}</p>
               )}
-
               {result && !result.loading && result.tokens.length > 0 && (
                 <>
                   <div className="bg-white border border-neutral-200 rounded-xl p-4 leading-loose">
@@ -148,8 +147,6 @@ export default function ModelCompare({ prompt, temperature, mode }: Props) {
                       ))}
                     </div>
                   </div>
-
-                  {/* Average confidence comparison */}
                   <div className="text-xs text-neutral-500 space-y-1">
                     {['high', 'mid', 'low'].map((cls) => {
                       const count = result.tokens.filter(
@@ -157,14 +154,10 @@ export default function ModelCompare({ prompt, temperature, mode }: Props) {
                       ).length
                       const pct = Math.round((count / result.tokens.length) * 100)
                       const colors: Record<string, string> = {
-                        high: 'text-emerald-600',
-                        mid: 'text-amber-600',
-                        low: 'text-red-500',
+                        high: 'text-emerald-600', mid: 'text-amber-600', low: 'text-red-500',
                       }
                       const labels: Record<string, string> = {
-                        high: 'High confidence',
-                        mid: 'Medium',
-                        low: 'Contested',
+                        high: 'High confidence', mid: 'Medium', low: 'Contested',
                       }
                       return (
                         <span key={cls} className={`mr-3 ${colors[cls]}`}>
@@ -173,18 +166,15 @@ export default function ModelCompare({ prompt, temperature, mode }: Props) {
                       )
                     })}
                   </div>
-
                   {selected !== null && result.tokens[selected] && (
                     <DistributionPanel
                       token={result.tokens[selected]}
                       tokenIndex={selected}
                       totalTokens={result.tokens.length}
-                      context={result.tokens
-                        .slice(0, selected)
-                        .map((t) => t.word)
-                        .join('')}
+                      context={result.tokens.slice(0, selected).map((t) => t.word).join('')}
                       model={result.model}
                       mode={mode}
+                      apiKey={apiKey}
                       onClose={() => setSelected(null)}
                     />
                   )}

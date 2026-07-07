@@ -7,11 +7,22 @@ import {
   parseTokenJSON,
 } from '@/lib/anthropic'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
 export async function POST(req: NextRequest) {
   const body = await req.json()
   const { type } = body
+
+  // Accept key from request header (user-supplied) or fall back to env var
+  const apiKey =
+    req.headers.get('x-anthropic-key') || process.env.ANTHROPIC_API_KEY
+
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: 'No API key provided. Please enter your Anthropic API key.' },
+      { status: 401 }
+    )
+  }
+
+  const client = new Anthropic({ apiKey })
 
   if (type === 'distributions') {
     const { prompt, model, temperature } = body

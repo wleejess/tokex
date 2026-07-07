@@ -3,17 +3,27 @@ import { NextRequest } from 'next/server'
 
 export const runtime = 'edge'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
 const STREAM_SYSTEM = `You are a helpful assistant. Respond naturally and concisely to the user's prompt in 3–5 sentences. Do not use markdown formatting.`
 
 export async function POST(req: NextRequest) {
   const { prompt, model, temperature } = await req.json()
 
+  // Accept key from request header (user-supplied) or fall back to env var
+  const apiKey =
+    req.headers.get('x-anthropic-key') || process.env.ANTHROPIC_API_KEY
+
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: 'No API key provided. Please enter your Anthropic API key.' }),
+      { status: 401 }
+    )
+  }
+
   if (!prompt || !model) {
     return new Response(JSON.stringify({ error: 'Missing prompt or model' }), { status: 400 })
   }
 
+  const client = new Anthropic({ apiKey })
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
